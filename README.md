@@ -82,3 +82,14 @@ Use the helper module/executable to create experiment files under `/mnt/gds2/cwd
 ./build/prepare_experiment_files memtier_exp_1g.bin 1073741824
 ```
 This creates `/mnt/gds2/cwd_test/memtier_exp_1g.bin` with deterministic content.
+
+## Object-level API (v1)
+- `memtier_load_tensor`: for model weights/safetensors/checkpoint tensor payload reads.
+- `memtier_load_chunks`: for RAG chunks/KV blocks/index blocks.
+- `MemTierDataset`: simple DataLoader-style indexed sample reader.
+- These are lightweight wrappers that only translate object semantics to file-range reads; final path selection is still decided by MemTier runtime.
+
+### Python wrapper status
+- Current Python API is a lightweight wrapper (`python/memtier`) intended for quick integration.
+- CPU-first behavior works without CUDA/GDS/PyTorch.
+- If PyTorch is unavailable, APIs return `bytes`/NumPy-compatible data.
