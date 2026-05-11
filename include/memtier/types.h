@@ -46,6 +46,18 @@ typedef enum memtier_prefetch_target_e {
   MEMTIER_PREFETCH_TO_HBM = 2,
 } memtier_prefetch_target_t;
 
+
+typedef struct memtier_range_s {
+  const char* path;
+  uint64_t offset;
+  size_t size;
+} memtier_range_t;
+
+typedef struct memtier_read_options_s {
+  memtier_target_t target;
+  uint32_t hints;
+} memtier_read_options_t;
+
 typedef struct memtier_prefetch_options_s {
   int device_id;
   memtier_prefetch_target_t target;
@@ -70,6 +82,10 @@ typedef struct memtier_stats_s {
   int last_selected_path;
   uint64_t prefetch_requests;
   uint64_t prefetch_bytes;
+  uint64_t readv_requests;
+  uint64_t original_ranges;
+  uint64_t coalesced_ranges;
+  uint64_t coalesced_bytes;
 } memtier_stats_t;
 
 typedef struct memtier_options_s {
@@ -88,6 +104,8 @@ typedef struct memtier_options_s {
   int async_mode;
   void* stream;
   int num_workers;
+  size_t coalesce_gap;
+  size_t max_coalesce_size;
 } memtier_options_t;
 
 #ifdef __cplusplus

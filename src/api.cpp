@@ -2,6 +2,7 @@
 
 #include "cuda_backend.h"
 #include "path_selector.h"
+#include "gds_backend.h"
 
 #include <algorithm>
 #include <cstring>
@@ -49,7 +50,7 @@ static int do_read_impl(memtier_ctx_t* ctx, const char* path, uint64_t offset, s
       int rc = copy_target(ce.data.data() + in_chunk); if (rc != MEMTIER_OK) return rc;
       std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.dram_hits++; ctx->stats.dram_bytes_served += need;
     } else if (p == MEMTIER_PATH_GDS_READ || p == MEMTIER_PATH_GDS_STUB_FALLBACK) {
-      std::vector<uint8_t> buf(need); size_t n = 0; int rc = memtier::gds_stub_read(ctx->options, path, cur_off, need, buf.data(), &n);
+      std::vector<uint8_t> buf(need); size_t n = 0; int rc = memtier_gds_read(ctx->options, path, cur_off, need, buf.data(), &n);
       if (rc == MEMTIER_OK) { rc = copy_target(buf.data()); if (rc != MEMTIER_OK) return rc; std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.gds_reads++; }
       else { size_t pn=0; rc = memtier::posix_pread_full(path, cur_off, need, buf.data(), &pn); if (rc != MEMTIER_OK) return rc; rc = copy_target(buf.data()); if (rc != MEMTIER_OK) return rc; std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.gds_fallbacks++; ctx->stats.posix_reads++; ctx->stats.ssd_bytes_read += pn; }
     } else {
@@ -67,10 +68,29 @@ static int do_read_impl(memtier_ctx_t* ctx, const char* path, uint64_t offset, s
   std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.total_requests++; return MEMTIER_OK;
 }
 
+
+int memtier_readv(memtier_ctx_t* ctx, const memtier_range_t* ranges, void** dsts, size_t nranges, const memtier_read_options_t* options){
+  if(!ctx||!ranges||!dsts||nranges==0) return MEMTIER_ERR_INVALID;
+  memtier_target_t target = options ? options->target : MEMTIER_TARGET_CPU;
+  struct Item{std::string path;uint64_t off;size_t sz;void* dst;};
+  std::vector<Item> items; items.reserve(nranges);
+  for(size_t i=0;i<nranges;++i){ if(!ranges[i].path||!dsts[i]||ranges[i].size==0) return MEMTIER_ERR_INVALID; items.push_back({ranges[i].path,ranges[i].offset,ranges[i].size,dsts[i]}); }
+  std::sort(items.begin(), items.end(), [](const Item&a,const Item&b){ if(a.path!=b.path) return a.path<b.path; return a.off<b.off;});
+  size_t i=0, coalesced=0; uint64_t cbytes=0;
+  while(i<items.size()){ size_t j=i+1; uint64_t base=items[i].off; size_t total=items[i].sz; std::string pth=items[i].path;
+    while(j<items.size() && items[j].path==pth){ uint64_t prev_end=base+total; if(items[j].off>=prev_end && items[j].off-prev_end<=ctx->options.coalesce_gap && (items[j].off+items[j].sz-base)<=ctx->options.max_coalesce_size){ total=(size_t)(items[j].off+items[j].sz-base); ++j;} else break; }
+    std::vector<uint8_t> tmp(total); int rc=do_read_impl(ctx,pth.c_str(),base,total,tmp.data(),MEMTIER_TARGET_CPU); if(rc!=MEMTIER_OK) return rc;
+    for(size_t k=i;k<j;++k){ size_t off=(size_t)(items[k].off-base); if(target==MEMTIER_TARGET_CPU){ std::memcpy(items[k].dst,tmp.data()+off,items[k].sz);} else { int crc=memtier_cuda_copy_to_gpu(items[k].dst,tmp.data()+off,items[k].sz,ctx->options.stream); if(crc!=MEMTIER_OK) return MEMTIER_ERR_CUDA; if(!ctx->options.async_mode&&memtier_cuda_synchronize(ctx->options.stream)!=MEMTIER_OK) return MEMTIER_ERR_CUDA; } }
+    coalesced++; cbytes += total; i=j;
+  }
+  {std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.readv_requests++; ctx->stats.original_ranges += nranges; ctx->stats.coalesced_ranges += coalesced; ctx->stats.coalesced_bytes += cbytes;}
+  return MEMTIER_OK;
+}
+
 int memtier_init(const memtier_options_t* options, memtier_ctx_t** out_ctx) {
   if (!out_ctx) return MEMTIER_ERR_INVALID;
-  memtier_options_t opt{}; opt.chunk_size=1u<<20; opt.dram_cache_size=64u<<20; opt.enable_dram_cache=1; opt.cache_admit=1; opt.gds_min_size=1u<<20; opt.gds_alignment=4096; opt.gds_stub_success=1; opt.num_workers=4;
-  if (options) opt = *options; if (opt.chunk_size==0) opt.chunk_size=1u<<20; if(opt.dram_cache_size==0) opt.dram_cache_size=64u<<20; if(opt.gds_min_size==0) opt.gds_min_size=1u<<20; if(opt.gds_alignment==0) opt.gds_alignment=4096; if(opt.num_workers<=0) opt.num_workers=4;
+  memtier_options_t opt{}; opt.chunk_size=1u<<20; opt.dram_cache_size=64u<<20; opt.enable_dram_cache=1; opt.cache_admit=1; opt.gds_min_size=1u<<20; opt.gds_alignment=4096; opt.gds_stub_success=1; opt.num_workers=4; opt.coalesce_gap=64u<<10; opt.max_coalesce_size=1u<<20;
+  if (options) opt = *options; if(opt.coalesce_gap==0) opt.coalesce_gap=64u<<10; if(opt.max_coalesce_size==0) opt.max_coalesce_size=1u<<20; if (opt.chunk_size==0) opt.chunk_size=1u<<20; if(opt.dram_cache_size==0) opt.dram_cache_size=64u<<20; if(opt.gds_min_size==0) opt.gds_min_size=1u<<20; if(opt.gds_alignment==0) opt.gds_alignment=4096; if(opt.num_workers<=0) opt.num_workers=4;
   auto* ctx = new (std::nothrow) memtier_ctx_s(opt); if(!ctx) return MEMTIER_ERR_NOMEM;
   for(int i=0;i<opt.num_workers;++i){ctx->workers.emplace_back([ctx](){for(;;){memtier_req_t* r=nullptr;{std::unique_lock<std::mutex> lk(ctx->q_mu);ctx->q_cv.wait(lk,[&](){return ctx->stop||!ctx->queue.empty();}); if(ctx->stop&&ctx->queue.empty()) return; r=ctx->queue.front(); ctx->queue.pop_front();} int rc=do_read_impl(ctx,r->path.c_str(),r->offset,r->size,r->dst,r->target); {std::lock_guard<std::mutex> lk(r->mu); r->result=rc; r->done=true;} r->cv.notify_all(); }});}
   *out_ctx = ctx; return MEMTIER_OK;

@@ -33,7 +33,7 @@ if(MEMTIER_ENABLE_GDS)
 endif()
 
 add_library(memtier STATIC
-  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp src/gds_backend_stub.cpp
+  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp
 )
 
 target_include_directories(memtier PUBLIC include)
@@ -48,14 +48,19 @@ else()
   target_compile_definitions(memtier PUBLIC MEMTIER_HAS_CUDA=0)
 endif()
 
+
 if(MEMTIER_GDS_AVAILABLE)
-  target_compile_definitions(memtier PUBLIC MEMTIER_HAS_GDS=1)
+  target_compile_definitions(memtier PUBLIC MEMTIER_HAS_GDS=1 MEMTIER_HAVE_GDS=1)
+  target_include_directories(memtier PRIVATE ${CUFILE_INCLUDE_DIR})
+  target_link_libraries(memtier PRIVATE ${CUFILE_LIBRARY})
+  target_sources(memtier PRIVATE src/gds_backend.cpp)
 else()
-  target_compile_definitions(memtier PUBLIC MEMTIER_HAS_GDS=0)
+  target_compile_definitions(memtier PUBLIC MEMTIER_HAS_GDS=0 MEMTIER_HAVE_GDS=0)
+  target_sources(memtier PRIVATE src/gds_backend_stub.cpp)
 endif()
 
 if(MEMTIER_BUILD_EXAMPLES)
-  foreach(ex basic_read cache_reuse path_policy_demo gpu_read_demo async_pipeline prefetch_demo)
+  foreach(ex basic_read cache_reuse path_policy_demo gpu_read_demo async_pipeline prefetch_demo readv_small_io)
     add_executable(${ex} examples/${ex}.cpp)
     target_link_libraries(${ex} PRIVATE memtier)
   endforeach()
@@ -63,7 +68,7 @@ endif()
 
 if(MEMTIER_BUILD_TESTS)
   enable_testing()
-  foreach(t test_basic test_cache test_path_selector test_gpu_read test_async test_prefetch)
+  foreach(t test_basic test_cache test_path_selector test_gpu_read test_async test_prefetch test_readv test_gds_backend)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE memtier)
     add_test(NAME ${t} COMMAND ${t})
@@ -71,6 +76,8 @@ if(MEMTIER_BUILD_TESTS)
 endif()
 
 if(MEMTIER_BUILD_BENCHMARKS)
-  add_executable(bench_stub benchmarks/bench_stub.cpp)
-  target_link_libraries(bench_stub PRIVATE memtier)
+  foreach(b bench_stub bench_large_read bench_reuse bench_small_readv)
+    add_executable(${b} benchmarks/${b}.cpp)
+    target_link_libraries(${b} PRIVATE memtier)
+  endforeach()
 endif()

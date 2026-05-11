@@ -1,34 +1,70 @@
-# MemTier (prototype)
+# MemTier
 
-MemTier 是用户态 data supply runtime 原型，提供 file-range read 并支持 userspace DRAM cache。
+MemTier is a user-level GPU-aware data supply runtime.
 
-- 不修改 Linux kernel / Page Cache。
-- GDS backend 是可选项。
-- 无 CUDA/GDS 可运行 CPU-only 构建与测试。
+## Supported paths
+- POSIX buffered path
+- DRAM cache path (userspace cache)
+- Optional GDS path (real backend if available, otherwise stub/fallback)
+- CUDA GPU target if available
 
 ## Build
 
+### CPU-only
 ```bash
-cmake -S . -B build
-cmake --build build -j
-ctest --test-dir build --output-on-failure
+mkdir -p build && cd build
+cmake ..
+make -j
+ctest
 ```
 
-可选参数：
-
-- `-DMEMTIER_ENABLE_CUDA=ON`
-- `-DMEMTIER_ENABLE_GDS=ON`
-- `-DMEMTIER_STRICT_GDS=ON`
-
-## Example
-
+### CUDA
 ```bash
-./build/memtier_example <file>
+cmake -DMEMTIER_ENABLE_CUDA=ON ..
+```
+
+### GDS
+```bash
+cmake -DMEMTIER_ENABLE_GDS=ON ..
+```
+
+## Run examples
+```bash
+./build/basic_read <file>
+./build/cache_reuse
+./build/path_policy_demo
+./build/readv_small_io
+./build/async_pipeline
+./build/prefetch_demo
+```
+
+## Benchmarks
+```bash
+./build/bench_large_read --file=test.bin --size=1073741824 --mode=memtier
+./build/bench_reuse test.bin
+./build/bench_small_readv test.bin
+```
+
+## API quick usage
+```c
+memtier_ctx_t* ctx = NULL;
+memtier_init(NULL, &ctx);
+memtier_read(ctx, path, offset, size, dst, MEMTIER_TARGET_CPU);
+memtier_prefetch(ctx, path, offset, size, NULL);
+memtier_stats_t st;
+memtier_stats(ctx, &st);
+memtier_finalize(ctx);
 ```
 
 ## Limitations
+- Does not modify Linux Page Cache or kernel behavior.
+- DRAM cache is userspace cache only.
+- UVM/HBM cache is not fully implemented.
+- GDS is optional; missing GDS uses stub/fallback.
+- Prefetch TO_HBM and async prefetch are currently unsupported.
 
-- 当前仅实现 CPU target 的真实路径；GPU/GDS 为可选/预留。
-- read_async 通过线程封装同步 read。
-- 第一版只读，不提供写一致性协议。
-- Prefetch TO_HBM and async prefetch are currently unsupported in this prototype.
+## Troubleshooting
+- No CUDA: GPU target returns `MEMTIER_ERR_UNSUPPORTED`.
+- No GDS: build still works; runtime uses stub/fallback.
+- O_DIRECT alignment error: ensure offset/size meet alignment requirements.
+- Permission error: check file permissions and mount options.

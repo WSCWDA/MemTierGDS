@@ -17,6 +17,8 @@ int memtier_init(const memtier_options_t* options, memtier_ctx_t** out_ctx);
 int memtier_finalize(memtier_ctx_t* ctx);
 int memtier_read(memtier_ctx_t* ctx, const char* path, uint64_t offset, size_t size, void* dst,
                  memtier_target_t target);
+int memtier_readv(memtier_ctx_t* ctx, const memtier_range_t* ranges, void** dsts, size_t nranges,
+                  const memtier_read_options_t* options);
 int memtier_read_async(memtier_ctx_t* ctx, const char* path, uint64_t offset, size_t size, void* dst,
                        memtier_target_t target, memtier_req_t** out_req);
 int memtier_wait(memtier_req_t* req);
