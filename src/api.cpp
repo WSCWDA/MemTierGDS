@@ -52,13 +52,14 @@ static int do_read_impl(memtier_ctx_t* ctx, const char* path, uint64_t offset, s
     } else if (p == MEMTIER_PATH_GDS_READ || p == MEMTIER_PATH_GDS_STUB_FALLBACK) {
       std::vector<uint8_t> buf(need); size_t n = 0; int rc = memtier_gds_read(ctx->options, path, cur_off, need, buf.data(), &n);
       if (rc == MEMTIER_OK) { rc = copy_target(buf.data()); if (rc != MEMTIER_OK) return rc; std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.gds_reads++; }
-      else { size_t pn=0; rc = memtier::posix_pread_full(path, cur_off, need, buf.data(), &pn); if (rc != MEMTIER_OK) return rc; rc = copy_target(buf.data()); if (rc != MEMTIER_OK) return rc; std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.gds_fallbacks++; ctx->stats.posix_reads++; ctx->stats.ssd_bytes_read += pn; }
+      else { size_t pn=0; rc = memtier::posix_pread_full(path, cur_off, need, buf.data(), &pn); if (rc != MEMTIER_OK) return rc; if (pn < need) return MEMTIER_ERR_IO; rc = copy_target(buf.data()); if (rc != MEMTIER_OK) return rc; std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.gds_fallbacks++; ctx->stats.posix_reads++; ctx->stats.ssd_bytes_read += pn; }
     } else {
       std::vector<uint8_t> buf((p == MEMTIER_PATH_POSIX_READ_THEN_CACHE) ? chunk_size : need);
       uint64_t roff = (p == MEMTIER_PATH_POSIX_READ_THEN_CACHE) ? chunk_id * chunk_size : cur_off;
       size_t rsz = (p == MEMTIER_PATH_POSIX_READ_THEN_CACHE) ? chunk_size : need, n = 0;
       int rc = memtier::posix_pread_full(path, roff, rsz, buf.data(), &n); if (rc != MEMTIER_OK) return rc;
       size_t src_off = (p == MEMTIER_PATH_POSIX_READ_THEN_CACHE) ? in_chunk : 0;
+      if (n < src_off + need) return MEMTIER_ERR_IO;
       rc = copy_target(buf.data() + src_off); if (rc != MEMTIER_OK) return rc;
       if (p == MEMTIER_PATH_POSIX_READ_THEN_CACHE && ctx->options.cache_admit) ctx->cache.insert(key, buf.data(), n);
       std::lock_guard<std::mutex> lg(ctx->mu); ctx->stats.dram_misses++; ctx->stats.posix_reads++; ctx->stats.ssd_bytes_read += n;

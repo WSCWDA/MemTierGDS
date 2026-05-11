@@ -16,8 +16,7 @@ int posix_pread_full(const char* path, uint64_t offset, size_t size, uint8_t* ds
   while (total < size) {
     ssize_t n = pread(fd, dst + total, size - total, static_cast<off_t>(offset + total));
     if (n == 0) {
-      close(fd);
-      return MEMTIER_ERR_IO;
+      break;
     }
     if (n < 0) {
       if (errno == EINTR) continue;
