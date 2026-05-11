@@ -18,6 +18,13 @@ make -j
 ctest
 ```
 
+### One-click rebuild
+```bash
+./scripts/rebuild.sh
+# optional custom build dir and extra cmake args
+./scripts/rebuild.sh ./build -DMEMTIER_ENABLE_CUDA=ON
+```
+
 ### CUDA
 ```bash
 cmake -DMEMTIER_ENABLE_CUDA=ON ..
