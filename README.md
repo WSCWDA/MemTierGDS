@@ -68,3 +68,10 @@ memtier_finalize(ctx);
 - No GDS: build still works; runtime uses stub/fallback.
 - O_DIRECT alignment error: ensure offset/size meet alignment requirements.
 - Permission error: check file permissions and mount options.
+
+## Prepare experiment files on NVMe
+Use the helper module/executable to create experiment files under `/mnt/gds2/cwd_test`:
+```bash
+./build/prepare_experiment_files memtier_exp_1g.bin 1073741824
+```
+This creates `/mnt/gds2/cwd_test/memtier_exp_1g.bin` with deterministic content.

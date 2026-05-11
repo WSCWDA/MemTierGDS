@@ -33,7 +33,7 @@ if(MEMTIER_ENABLE_GDS)
 endif()
 
 add_library(memtier STATIC
-  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp
+  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp src/file_prep.cpp
 )
 
 target_include_directories(memtier PUBLIC include)
@@ -60,7 +60,7 @@ else()
 endif()
 
 if(MEMTIER_BUILD_EXAMPLES)
-  foreach(ex basic_read cache_reuse path_policy_demo gpu_read_demo async_pipeline prefetch_demo readv_small_io)
+  foreach(ex basic_read cache_reuse path_policy_demo gpu_read_demo async_pipeline prefetch_demo readv_small_io prepare_experiment_files)
     add_executable(${ex} examples/${ex}.cpp)
     target_link_libraries(${ex} PRIVATE memtier)
   endforeach()
@@ -68,7 +68,7 @@ endif()
 
 if(MEMTIER_BUILD_TESTS)
   enable_testing()
-  foreach(t test_basic test_cache test_path_selector test_gpu_read test_async test_prefetch test_readv test_gds_backend)
+  foreach(t test_basic test_cache test_path_selector test_gpu_read test_async test_prefetch test_readv test_gds_backend test_file_prep)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE memtier)
     add_test(NAME ${t} COMMAND ${t})
