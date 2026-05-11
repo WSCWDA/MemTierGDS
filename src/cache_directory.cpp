@@ -49,6 +49,12 @@ bool CacheDirectory::insert(const CacheKey& key, const uint8_t* data, size_t val
   return true;
 }
 
+
+bool CacheDirectory::contains(const CacheKey& key) {
+  std::lock_guard<std::mutex> g(mu_);
+  return table_.find(key) != table_.end();
+}
+
 uint64_t CacheDirectory::evictions() const {
   std::lock_guard<std::mutex> g(mu_);
   return evictions_;

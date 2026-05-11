@@ -18,6 +18,7 @@ typedef enum memtier_err_e {
   MEMTIER_ERR_UNSUPPORTED = -4,
   MEMTIER_ERR_INTERNAL = -5,
   MEMTIER_ERR_GDS = -6,
+  MEMTIER_ERR_CUDA = -7,
 } memtier_err_t;
 
 typedef enum memtier_path_e {
@@ -38,6 +39,22 @@ enum {
   MEMTIER_HINT_SEQUENTIAL = 1 << 5,
 };
 
+
+typedef enum memtier_prefetch_target_e {
+  MEMTIER_PREFETCH_AUTO = 0,
+  MEMTIER_PREFETCH_TO_DRAM = 1,
+  MEMTIER_PREFETCH_TO_HBM = 2,
+} memtier_prefetch_target_t;
+
+typedef struct memtier_prefetch_options_s {
+  int device_id;
+  memtier_prefetch_target_t target;
+  uint32_t hints;
+  int async;
+  int allow_gds;
+  int allow_posix;
+} memtier_prefetch_options_t;
+
 typedef struct memtier_stats_s {
   uint64_t total_requests;
   uint64_t dram_hits;
@@ -51,6 +68,8 @@ typedef struct memtier_stats_s {
   uint64_t selected_posix;
   uint64_t selected_cache;
   int last_selected_path;
+  uint64_t prefetch_requests;
+  uint64_t prefetch_bytes;
 } memtier_stats_t;
 
 typedef struct memtier_options_s {
@@ -66,6 +85,9 @@ typedef struct memtier_options_s {
   size_t gds_min_size;
   size_t gds_alignment;
   uint32_t hints;
+  int async_mode;
+  void* stream;
+  int num_workers;
 } memtier_options_t;
 
 #ifdef __cplusplus

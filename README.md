@@ -31,3 +31,4 @@ ctest --test-dir build --output-on-failure
 - 当前仅实现 CPU target 的真实路径；GPU/GDS 为可选/预留。
 - read_async 通过线程封装同步 read。
 - 第一版只读，不提供写一致性协议。
+- Prefetch TO_HBM and async prefetch are currently unsupported in this prototype.

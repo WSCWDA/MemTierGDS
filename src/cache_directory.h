@@ -29,6 +29,7 @@ class CacheDirectory {
   CacheDirectory(size_t chunk_size, size_t cache_size_bytes);
   bool lookup(const CacheKey& key, CacheEntry* out_entry);
   bool insert(const CacheKey& key, const uint8_t* data, size_t valid_size);
+  bool contains(const CacheKey& key);
   size_t chunk_size() const { return chunk_size_; }
   uint64_t evictions() const;
 

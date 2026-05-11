@@ -19,8 +19,12 @@ int memtier_read(memtier_ctx_t* ctx, const char* path, uint64_t offset, size_t s
                  memtier_target_t target);
 int memtier_read_async(memtier_ctx_t* ctx, const char* path, uint64_t offset, size_t size, void* dst,
                        memtier_target_t target, memtier_req_t** out_req);
-int memtier_wait(memtier_ctx_t* ctx, memtier_req_t* req);
-int memtier_prefetch(memtier_ctx_t* ctx, const char* path, uint64_t offset, size_t size);
+int memtier_wait(memtier_req_t* req);
+int memtier_test(memtier_req_t* req, int* done);
+int memtier_request_status(memtier_req_t* req, int* out_status);
+void memtier_request_free(memtier_req_t* req);
+int memtier_prefetch(memtier_ctx_t* ctx, const char* path, uint64_t offset, size_t size,
+                    const memtier_prefetch_options_t* options);
 int memtier_stats(memtier_ctx_t* ctx, memtier_stats_t* out_stats);
 const char* memtier_strerror(int err);
 

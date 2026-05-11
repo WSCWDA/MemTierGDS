@@ -27,7 +27,7 @@ int main() {
   memtier_stats(ctx, &s1);
   if (s1.dram_misses == 0 || s1.posix_reads == 0) return 3;
 
-  if (memtier_read(ctx, path, 0, buf.size(), buf.data(), MEMTIER_TARGET_GPU) != MEMTIER_OK) return 4;
+  if (memtier_read(ctx, path, 0, buf.size(), buf.data(), MEMTIER_TARGET_CPU) != MEMTIER_OK) return 4;
   memtier_stats_t s2{};
   memtier_stats(ctx, &s2);
   if (s2.dram_hits == 0) return 5;
