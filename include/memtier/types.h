@@ -8,10 +8,7 @@
 extern "C" {
 #endif
 
-typedef enum memtier_target_e {
-  MEMTIER_TARGET_CPU = 0,
-  MEMTIER_TARGET_GPU = 1,
-} memtier_target_t;
+typedef enum memtier_target_e { MEMTIER_TARGET_CPU = 0, MEMTIER_TARGET_GPU = 1 } memtier_target_t;
 
 typedef enum memtier_err_e {
   MEMTIER_OK = 0,
@@ -20,15 +17,40 @@ typedef enum memtier_err_e {
   MEMTIER_ERR_NOMEM = -3,
   MEMTIER_ERR_UNSUPPORTED = -4,
   MEMTIER_ERR_INTERNAL = -5,
+  MEMTIER_ERR_GDS = -6,
 } memtier_err_t;
+
+typedef enum memtier_path_e {
+  MEMTIER_PATH_DRAM_HIT = 0,
+  MEMTIER_PATH_POSIX_READ = 1,
+  MEMTIER_PATH_POSIX_READ_THEN_CACHE = 2,
+  MEMTIER_PATH_GDS_READ = 3,
+  MEMTIER_PATH_GDS_STUB_FALLBACK = 4,
+} memtier_path_t;
+
+enum {
+  MEMTIER_HINT_NONE = 0,
+  MEMTIER_HINT_REUSE = 1 << 0,
+  MEMTIER_HINT_SMALL_IO = 1 << 1,
+  MEMTIER_HINT_RANDOM = 1 << 2,
+  MEMTIER_HINT_STREAMING = 1 << 3,
+  MEMTIER_HINT_CHECKPOINT = 1 << 4,
+  MEMTIER_HINT_SEQUENTIAL = 1 << 5,
+};
 
 typedef struct memtier_stats_s {
   uint64_t total_requests;
   uint64_t dram_hits;
   uint64_t dram_misses;
   uint64_t posix_reads;
+  uint64_t gds_reads;
+  uint64_t gds_fallbacks;
   uint64_t ssd_bytes_read;
   uint64_t dram_bytes_served;
+  uint64_t selected_gds;
+  uint64_t selected_posix;
+  uint64_t selected_cache;
+  int last_selected_path;
 } memtier_stats_t;
 
 typedef struct memtier_options_s {
@@ -39,6 +61,11 @@ typedef struct memtier_options_s {
   int bypass_cache;
   int force_gds;
   int force_posix;
+  int enable_gds;
+  int gds_stub_success;
+  size_t gds_min_size;
+  size_t gds_alignment;
+  uint32_t hints;
 } memtier_options_t;
 
 #ifdef __cplusplus

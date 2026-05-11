@@ -44,6 +44,8 @@ add_library(memtier STATIC
   src/logger.cpp
   src/cache_directory.cpp
   src/context.cpp
+  src/path_selector.cpp
+  src/gds_backend_stub.cpp
 )
 
 target_include_directories(memtier PUBLIC include)
@@ -70,6 +72,8 @@ if(MEMTIER_BUILD_EXAMPLES)
   target_link_libraries(memtier_example PRIVATE memtier)
   add_executable(cache_reuse examples/cache_reuse.cpp)
   target_link_libraries(cache_reuse PRIVATE memtier)
+  add_executable(path_policy_demo examples/path_policy_demo.cpp)
+  target_link_libraries(path_policy_demo PRIVATE memtier)
 endif()
 
 if(MEMTIER_BUILD_TESTS)
@@ -80,6 +84,9 @@ if(MEMTIER_BUILD_TESTS)
   add_executable(test_cache tests/test_cache.cpp)
   target_link_libraries(test_cache PRIVATE memtier)
   add_test(NAME test_cache COMMAND test_cache)
+  add_executable(test_path_selector tests/test_path_selector.cpp)
+  target_link_libraries(test_path_selector PRIVATE memtier)
+  add_test(NAME test_path_selector COMMAND test_path_selector)
 endif()
 
 if(MEMTIER_BUILD_BENCHMARKS)
