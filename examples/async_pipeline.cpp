@@ -5,10 +5,11 @@
 #include <fstream>
 #include <thread>
 #include <vector>
+#include "../src/file_prep.h"
 
 int main(){
-  const char* path="memtier_async_demo.bin";
-  {std::ofstream ofs(path,std::ios::binary);std::vector<unsigned char>d(8<<20,3);ofs.write((const char*)d.data(),d.size());}
+  const char* path="/mnt/gds2/cwd_test/memtier_async_demo.bin";
+  if(memtier_prepare_experiment_file("/mnt/gds2/cwd_test", "memtier_async_demo.bin", 8ull<<20)!=0){return 1;}
   memtier_options_t o{};o.chunk_size=1<<20;o.dram_cache_size=4<<20;o.enable_dram_cache=1;o.cache_admit=1;o.num_workers=4;
   memtier_ctx_t* c=nullptr; memtier_init(&o,&c);
   std::vector<std::vector<unsigned char>> bufs(8,std::vector<unsigned char>(1<<20)); std::vector<memtier_req_t*> reqs(8,nullptr);

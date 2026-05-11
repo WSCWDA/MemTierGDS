@@ -3,14 +3,11 @@
 #include <cstdio>
 #include <fstream>
 #include <vector>
+#include "../src/file_prep.h"
 
 int main() {
-  const char* path = "memtier_cache_reuse.bin";
-  {
-    std::ofstream ofs(path, std::ios::binary);
-    std::vector<unsigned char> data(1 << 20, 7);
-    ofs.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
-  }
+  const char* path = "/mnt/gds2/cwd_test/memtier_cache_reuse.bin";
+  if (memtier_prepare_experiment_file("/mnt/gds2/cwd_test", "memtier_cache_reuse.bin", 1ull << 20) != 0) return 1;
 
   memtier_ctx_t* ctx = nullptr;
   memtier_options_t opt{};

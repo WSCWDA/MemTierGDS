@@ -3,8 +3,9 @@
 #include <cstdio>
 #include <fstream>
 #include <vector>
+#include "../src/file_prep.h"
 
-int main(){const char* path="memtier_readv_demo.bin";{std::ofstream ofs(path,std::ios::binary);std::vector<unsigned char>d(4<<20,1);ofs.write((const char*)d.data(),d.size());}
+int main(){const char* path="/mnt/gds2/cwd_test/memtier_readv_demo.bin";if(memtier_prepare_experiment_file("/mnt/gds2/cwd_test", "memtier_policy_demo.bin", 4ull<<20)!=0){return 1;}
 memtier_options_t o{};o.chunk_size=1<<20;o.dram_cache_size=2<<20;o.enable_dram_cache=1;o.cache_admit=1; memtier_ctx_t* c=nullptr; memtier_init(&o,&c);
 const size_t n=100; std::vector<memtier_range_t> rs(n); std::vector<std::vector<unsigned char>> bufs(n,std::vector<unsigned char>(4096)); std::vector<void*> dsts(n);
 for(size_t i=0;i<n;++i){rs[i]={path,(uint64_t)(i*8192),4096};dsts[i]=bufs[i].data();}
