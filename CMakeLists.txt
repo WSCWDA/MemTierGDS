@@ -33,34 +33,49 @@ if(MEMTIER_ENABLE_GDS)
 endif()
 
 add_library(memtier STATIC
-  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp src/file_prep.cpp
+  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp src/file_prep.cpp src/object_tensor.cpp src/object_chunks.cpp src/object_dataset.cpp
 )
 
 target_include_directories(memtier PUBLIC include)
 target_link_libraries(memtier PUBLIC pthread)
 
+add_library(memtier_shared SHARED
+  src/api.cpp src/posix_backend.cpp src/logger.cpp src/cache_directory.cpp src/context.cpp src/path_selector.cpp src/file_prep.cpp src/object_tensor.cpp src/object_chunks.cpp src/object_dataset.cpp
+)
+target_include_directories(memtier_shared PUBLIC include)
+target_link_libraries(memtier_shared PUBLIC pthread)
+set_target_properties(memtier_shared PROPERTIES OUTPUT_NAME memtier)
+
 if(MEMTIER_ENABLE_CUDA)
   target_sources(memtier PRIVATE src/cuda_backend.cpp)
+  target_sources(memtier_shared PRIVATE src/cuda_backend.cpp)
   target_link_libraries(memtier PUBLIC CUDA::cudart)
   target_compile_definitions(memtier PUBLIC MEMTIER_HAS_CUDA=1)
+  target_compile_definitions(memtier_shared PUBLIC MEMTIER_HAS_CUDA=1)
 else()
   target_sources(memtier PRIVATE src/cuda_backend_stub.cpp)
+  target_sources(memtier_shared PRIVATE src/cuda_backend_stub.cpp)
   target_compile_definitions(memtier PUBLIC MEMTIER_HAS_CUDA=0)
+  target_compile_definitions(memtier_shared PUBLIC MEMTIER_HAS_CUDA=0)
 endif()
 
 
 if(MEMTIER_GDS_AVAILABLE)
   target_compile_definitions(memtier PUBLIC MEMTIER_HAS_GDS=1 MEMTIER_HAVE_GDS=1)
+  target_compile_definitions(memtier_shared PUBLIC MEMTIER_HAS_GDS=1 MEMTIER_HAVE_GDS=1)
   target_include_directories(memtier PRIVATE ${CUFILE_INCLUDE_DIR})
   target_link_libraries(memtier PRIVATE ${CUFILE_LIBRARY})
   target_sources(memtier PRIVATE src/gds_backend.cpp)
+  target_sources(memtier_shared PRIVATE src/gds_backend.cpp)
 else()
   target_compile_definitions(memtier PUBLIC MEMTIER_HAS_GDS=0 MEMTIER_HAVE_GDS=0)
+  target_compile_definitions(memtier_shared PUBLIC MEMTIER_HAS_GDS=0 MEMTIER_HAVE_GDS=0)
   target_sources(memtier PRIVATE src/gds_backend_stub.cpp)
+  target_sources(memtier_shared PRIVATE src/gds_backend_stub.cpp)
 endif()
 
 if(MEMTIER_BUILD_EXAMPLES)
-  foreach(ex basic_read cache_reuse path_policy_demo gpu_read_demo async_pipeline prefetch_demo readv_small_io prepare_experiment_files)
+  foreach(ex basic_read cache_reuse path_policy_demo gpu_read_demo async_pipeline prefetch_demo readv_small_io prepare_experiment_files load_tensor_demo load_chunks_demo)
     add_executable(${ex} examples/${ex}.cpp)
     target_link_libraries(${ex} PRIVATE memtier)
   endforeach()
@@ -68,7 +83,7 @@ endif()
 
 if(MEMTIER_BUILD_TESTS)
   enable_testing()
-  foreach(t test_basic test_cache test_path_selector test_gpu_read test_async test_prefetch test_readv test_gds_backend test_file_prep)
+  foreach(t test_basic test_cache test_path_selector test_gpu_read test_async test_prefetch test_readv test_gds_backend test_file_prep test_object_tensor test_object_chunks test_dataset)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE memtier)
     add_test(NAME ${t} COMMAND ${t})
