@@ -1,14 +1,31 @@
-from memtier import MemTierDataset
+#!/usr/bin/env python3
+import os, sys, tempfile
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+import memtier
 
-if __name__ == "__main__":
-    data_file = "py_ds.bin"
-    idx_file = "py_ds.idx"
-    data = bytes([i % 251 for i in range(8192)])
-    with open(data_file, "wb") as f:
-        f.write(data)
+try:
+    import torch
+    from torch.utils.data import DataLoader
+except Exception:
+    torch = None
+
+with tempfile.TemporaryDirectory() as td:
+    data_file = os.path.join(td, "train.bin")
+    idx_file = os.path.join(td, "train.idx")
+    data = bytes([i % 251 for i in range(3 * 4096)])
+    open(data_file, "wb").write(data)
     with open(idx_file, "w") as f:
-        f.write(f"0 {data_file} 0 4096\n")
-        f.write(f"1 {data_file} 4096 4096\n")
-    ds = MemTierDataset(idx_file)
-    assert ds[1] == data[4096:8192]
-    print("ok")
+        for i in range(3):
+            f.write(f"{i} {i*4096} 4096 {i}\n")
+
+    ds = memtier.MemTierDataset(index_file=idx_file, data_file=data_file, target="cpu")
+    for i in range(3):
+        s, l = ds[i]
+        raw = s.tobytes() if hasattr(s, "tobytes") else bytes(s)
+        print(i, l, list(raw[:4]))
+
+    if torch is not None:
+        dl = DataLoader(ds, batch_size=2)
+        batch = next(iter(dl))
+        print("dataloader batch ok", type(batch))
+print("python_dataset_demo ok")

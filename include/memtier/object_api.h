@@ -29,15 +29,16 @@ class MemTierDataset {
     std::string path;
     uint64_t offset;
     size_t size;
+    int label;
   };
 
-  explicit MemTierDataset(const std::string& index_file);
+  MemTierDataset(memtier_ctx_t* ctx, const std::string& index_file);
   size_t size() const;
-  int read_sample(memtier_ctx_t* ctx, size_t idx, void* dst,
-                  const memtier_read_options_t* options = nullptr) const;
+  int read_sample(size_t idx, void* dst, const memtier_read_options_t* options = nullptr) const;
   const SampleRef& sample(size_t idx) const;
 
  private:
+  memtier_ctx_t* ctx_;
   std::vector<SampleRef> samples_;
 };
 #endif
