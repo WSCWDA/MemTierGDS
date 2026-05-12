@@ -7,3 +7,4 @@ int memtier_cuda_free(void*) { return MEMTIER_ERR_UNSUPPORTED; }
 int memtier_cuda_synchronize(void*) { return MEMTIER_ERR_UNSUPPORTED; }
 int memtier_cuda_available() { return 0; }
 int memtier_cuda_copy_to_host(void*, const void*, size_t) { return MEMTIER_ERR_UNSUPPORTED; }
+int memtier_cuda_device_name(int, char*, size_t) { return MEMTIER_ERR_UNSUPPORTED; }

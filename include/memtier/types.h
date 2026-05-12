@@ -37,6 +37,7 @@ enum {
   MEMTIER_HINT_STREAMING = 1 << 3,
   MEMTIER_HINT_CHECKPOINT = 1 << 4,
   MEMTIER_HINT_SEQUENTIAL = 1 << 5,
+  MEMTIER_HINT_LATENCY_SENSITIVE = 1 << 6,
 };
 
 
@@ -106,6 +107,7 @@ typedef struct memtier_options_s {
   int num_workers;
   size_t coalesce_gap;
   size_t max_coalesce_size;
+  int preferred_device_id;
 } memtier_options_t;
 
 #ifdef __cplusplus

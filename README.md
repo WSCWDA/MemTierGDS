@@ -82,3 +82,42 @@ Use the helper module/executable to create experiment files under `/mnt/gds2/cwd
 ./build/prepare_experiment_files memtier_exp_1g.bin 1073741824
 ```
 This creates `/mnt/gds2/cwd_test/memtier_exp_1g.bin` with deterministic content.
+
+## Object-level API (v1)
+- `memtier_load_tensor`: for model weights/safetensors/checkpoint tensor payload reads.
+- `memtier_load_chunks`: for RAG chunks/KV blocks/index blocks.
+- `MemTierDataset`: simple DataLoader-style indexed sample reader.
+- These are lightweight wrappers that only translate object semantics to file-range reads; final path selection is still decided by MemTier runtime.
+
+### Python wrapper status
+- Current Python API is a lightweight wrapper (`python/memtier`) intended for quick integration.
+- CPU-first behavior works without CUDA/GDS/PyTorch.
+- If PyTorch is unavailable, APIs return `bytes`/NumPy-compatible data.
+
+
+## PyTorch-compatible Object API
+- `memtier.read_into_tensor(path, offset, tensor)`
+- `memtier.load_tensor(path, offset, shape, dtype, device)`
+- `memtier.MemTierDataset(index_file, data_file, target)`
+
+Compatibility approach:
+- No PyTorch source changes.
+- Integration uses Python wrapper + C API + `tensor.data_ptr()`.
+- If PyTorch is absent, CPU bytes/NumPy fallback still works.
+
+Example use:
+- Use `load_tensor` for model-weight payload slices.
+- Use `MemTierDataset` directly or with `torch.utils.data.DataLoader`.
+
+Current limits:
+- Not a full replacement of `torch.load`.
+- Does not fully parse safetensors metadata.
+- CUDA/GDS are optional runtime paths.
+- Non-contiguous tensors are not supported in `read_into_tensor`.
+- Full async stream semantics are deferred.
+
+Python scripts:
+```bash
+python tests/test_python_tensor.py
+python tests/test_python_dataset.py
+```
