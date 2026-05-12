@@ -107,6 +107,7 @@ typedef struct memtier_options_s {
   int num_workers;
   size_t coalesce_gap;
   size_t max_coalesce_size;
+  int preferred_device_id;
 } memtier_options_t;
 
 #ifdef __cplusplus

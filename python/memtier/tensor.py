@@ -1,5 +1,6 @@
 import ctypes
 import math
+import os
 
 from ._ctypes import MEMTIER_ERR_UNSUPPORTED, MEMTIER_OK, MEMTIER_TARGET_CPU, MEMTIER_TARGET_GPU, get_runtime
 
@@ -40,7 +41,9 @@ def read_into_tensor(path, offset, tensor, hints=None, cache_admit=True):
         raise RuntimeError(f"memtier_read failed: {msg}")
 
 
-def load_tensor(path, offset, nbytes=None, shape=None, dtype="uint8", device="cpu", hints=None):
+def load_tensor(path, offset, nbytes=None, shape=None, dtype="uint8", device=None, hints=None):
+    if device is None:
+        device = f"cuda:{os.environ.get('MEMTIER_DEVICE_ID', '0')}" if torch is not None else "cpu"
     if dtype not in _DTYPE_SIZE:
         raise ValueError("dtype must be one of uint8/int32/float16/float32")
     if nbytes is None:

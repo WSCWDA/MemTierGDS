@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(MEMTIER_ENABLE_CUDA "Enable CUDA backend" OFF)
+option(MEMTIER_ENABLE_CUDA "Enable CUDA backend" ON)
 option(MEMTIER_ENABLE_GDS "Enable GDS backend" OFF)
 option(MEMTIER_STRICT_GDS "Fail configure if GDS requested but not found" OFF)
 option(MEMTIER_BUILD_TESTS "Build tests" ON)

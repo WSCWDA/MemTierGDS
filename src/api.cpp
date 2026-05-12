@@ -5,6 +5,7 @@
 #include "gds_backend.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <vector>
@@ -90,8 +91,20 @@ int memtier_readv(memtier_ctx_t* ctx, const memtier_range_t* ranges, void** dsts
 
 int memtier_init(const memtier_options_t* options, memtier_ctx_t** out_ctx) {
   if (!out_ctx) return MEMTIER_ERR_INVALID;
-  memtier_options_t opt{}; opt.chunk_size=1u<<20; opt.dram_cache_size=64u<<20; opt.enable_dram_cache=1; opt.cache_admit=1; opt.gds_min_size=1u<<20; opt.gds_alignment=4096; opt.gds_stub_success=1; opt.num_workers=4; opt.coalesce_gap=64u<<10; opt.max_coalesce_size=1u<<20;
-  if (options) opt = *options; if(opt.coalesce_gap==0) opt.coalesce_gap=64u<<10; if(opt.max_coalesce_size==0) opt.max_coalesce_size=1u<<20; if (opt.chunk_size==0) opt.chunk_size=1u<<20; if(opt.dram_cache_size==0) opt.dram_cache_size=64u<<20; if(opt.gds_min_size==0) opt.gds_min_size=1u<<20; if(opt.gds_alignment==0) opt.gds_alignment=4096; if(opt.num_workers<=0) opt.num_workers=4;
+  memtier_options_t opt{}; opt.chunk_size=1u<<20; opt.dram_cache_size=64u<<20; opt.enable_dram_cache=1; opt.cache_admit=1; opt.gds_min_size=1u<<20; opt.gds_alignment=4096; opt.gds_stub_success=1; opt.num_workers=4; opt.coalesce_gap=64u<<10; opt.max_coalesce_size=1u<<20; opt.force_posix=0; opt.preferred_device_id=0;
+
+  if (options) opt = *options; if(opt.coalesce_gap==0) opt.coalesce_gap=64u<<10; if(opt.stream==nullptr){/* keep null stream */}
+  int configured_device_id = opt.preferred_device_id;
+  if (configured_device_id < 0) configured_device_id = 0;
+  if(memtier_cuda_available()){
+    char dev_name[256] = {0};
+    if(memtier_cuda_device_name(configured_device_id, dev_name, sizeof(dev_name))==MEMTIER_OK){
+      std::printf("[MemTier] GPU device_id=%d model=%s\n", configured_device_id, dev_name);
+    } else {
+      std::printf("[MemTier] GPU device_id=%d model=<unknown>\n", configured_device_id);
+    }
+  }
+ if(opt.max_coalesce_size==0) opt.max_coalesce_size=1u<<20; if (opt.chunk_size==0) opt.chunk_size=1u<<20; if(opt.dram_cache_size==0) opt.dram_cache_size=64u<<20; if(opt.gds_min_size==0) opt.gds_min_size=1u<<20; if(opt.gds_alignment==0) opt.gds_alignment=4096; if(opt.num_workers<=0) opt.num_workers=4;
   auto* ctx = new (std::nothrow) memtier_ctx_s(opt); if(!ctx) return MEMTIER_ERR_NOMEM;
   for(int i=0;i<opt.num_workers;++i){ctx->workers.emplace_back([ctx](){for(;;){memtier_req_t* r=nullptr;{std::unique_lock<std::mutex> lk(ctx->q_mu);ctx->q_cv.wait(lk,[&](){return ctx->stop||!ctx->queue.empty();}); if(ctx->stop&&ctx->queue.empty()) return; r=ctx->queue.front(); ctx->queue.pop_front();} int rc=do_read_impl(ctx,r->path.c_str(),r->offset,r->size,r->dst,r->target); {std::lock_guard<std::mutex> lk(r->mu); r->result=rc; r->done=true;} r->cv.notify_all(); }});}
   *out_ctx = ctx; return MEMTIER_OK;

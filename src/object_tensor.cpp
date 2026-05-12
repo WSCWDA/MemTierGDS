@@ -8,7 +8,7 @@ int memtier_load_tensor(memtier_ctx_t* ctx, const memtier_tensor_desc_t* desc, v
 
   memtier_tensor_options_t default_opt{};
   default_opt.device_id = 0;
-  default_opt.target = MEMTIER_TARGET_CPU;
+  default_opt.target = MEMTIER_TARGET_GPU;
   default_opt.async = false;
   default_opt.stream = nullptr;
   default_opt.cache_admit = true;

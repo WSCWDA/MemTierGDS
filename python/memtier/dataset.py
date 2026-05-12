@@ -1,3 +1,4 @@
+import os
 from .tensor import load_tensor
 
 try:
@@ -9,10 +10,12 @@ except Exception:
 
 
 class MemTierDataset(_TorchDataset):
-    def __init__(self, index_file, data_file=None, target="cpu", dtype="uint8", shape=None,
+    def __init__(self, index_file, data_file=None, target=None, dtype="uint8", shape=None,
                  transform=None, cache_policy="adaptive", hints=None, return_label=True):
         self.index_file = index_file
         self.data_file = data_file
+        if target is None:
+            target = f"cuda:{os.environ.get('MEMTIER_DEVICE_ID', '0')}" if torch is not None else "cpu"
         self.target = target
         self.dtype = dtype
         self.shape = shape

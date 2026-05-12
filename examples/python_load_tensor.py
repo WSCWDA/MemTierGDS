@@ -7,7 +7,8 @@ with tempfile.TemporaryDirectory() as td:
     path = os.path.join(td, "py_tensor.bin")
     data = bytes([i % 251 for i in range(1024 * 1024)])
     open(path, "wb").write(data)
-    out = memtier.load_tensor(path, 256, nbytes=4096, device="cpu")
+    dev = f"cuda:{os.environ.get('MEMTIER_DEVICE_ID', '0')}"
+    out = memtier.load_tensor(path, 256, nbytes=4096, device=dev)
     shape = getattr(out, "shape", (len(out),))
     raw = out.tobytes() if hasattr(out, "tobytes") else bytes(out)
     print(type(out), shape, list(raw[:8]))

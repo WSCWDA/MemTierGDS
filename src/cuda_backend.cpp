@@ -2,6 +2,7 @@
 #include "memtier/types.h"
 
 #include <cuda_runtime.h>
+#include <cstdio>
 
 int memtier_cuda_copy_to_gpu(void* gpu_dst, const void* host_src, size_t size, void* stream) {
   cudaStream_t s = static_cast<cudaStream_t>(stream);
@@ -19,4 +20,11 @@ int memtier_cuda_synchronize(void* stream) {
 int memtier_cuda_available() { int n = 0; return cudaGetDeviceCount(&n) == cudaSuccess && n > 0; }
 int memtier_cuda_copy_to_host(void* host_dst, const void* gpu_src, size_t size) {
   return cudaMemcpy(host_dst, gpu_src, size, cudaMemcpyDeviceToHost) == cudaSuccess ? MEMTIER_OK : MEMTIER_ERR_CUDA;
+}
+int memtier_cuda_device_name(int device_id, char* out_name, size_t out_len) {
+  if (!out_name || out_len == 0) return MEMTIER_ERR_INVALID;
+  cudaDeviceProp prop{};
+  if (cudaGetDeviceProperties(&prop, device_id) != cudaSuccess) return MEMTIER_ERR_CUDA;
+  snprintf(out_name, out_len, "%s", prop.name);
+  return MEMTIER_OK;
 }

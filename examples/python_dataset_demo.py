@@ -18,7 +18,8 @@ with tempfile.TemporaryDirectory() as td:
         for i in range(3):
             f.write(f"{i} {i*4096} 4096 {i}\n")
 
-    ds = memtier.MemTierDataset(index_file=idx_file, data_file=data_file, target="cpu")
+    dev = f"cuda:{os.environ.get('MEMTIER_DEVICE_ID', '0')}"
+    ds = memtier.MemTierDataset(index_file=idx_file, data_file=data_file, target=dev)
     for i in range(3):
         s, l = ds[i]
         raw = s.tobytes() if hasattr(s, "tobytes") else bytes(s)
