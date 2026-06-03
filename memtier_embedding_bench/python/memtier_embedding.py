@@ -15,8 +15,10 @@ import numpy as np
 
 try:
     from embedding_workload import generate_ids, ids_to_blocks
+    from trace_reader import EmbeddingTrace
 except ImportError:  # pragma: no cover
     from .embedding_workload import generate_ids, ids_to_blocks
+    from .trace_reader import EmbeddingTrace
 
 
 class MemTierEmbeddingConfig(ctypes.Structure):
@@ -161,16 +163,33 @@ def percentile(values: list[float], pct: float) -> float:
 
 
 def run(args: argparse.Namespace) -> dict:
-    trace = np.load(args.trace) if args.trace else generate_ids(
-        num_embeddings=args.num_embeddings,
-        batch_size=args.batch_size,
-        bag_size=args.bag_size,
-        num_batches=args.num_batches,
-        dist=args.dist,
-        zipf_alpha=args.zipf_alpha,
-        overlap_ratio=args.overlap_ratio,
-        seed=args.seed,
-    )
+    trace_name = args.trace_name
+    trace_metadata = {}
+    if args.trace_file or args.trace:
+        trace_path = args.trace_file or args.trace
+        trace_reader = EmbeddingTrace(trace_path, rows_per_block=args.rows_per_block)
+        trace_metadata = trace_reader.metadata
+        batches = trace_reader.iter_batches()
+        num_batches = trace_reader.num_batches
+        trace_name = trace_name or trace_reader.metadata.get("trace_name", Path(trace_path).stem)
+    else:
+        trace = generate_ids(
+            num_embeddings=args.num_embeddings,
+            batch_size=args.batch_size,
+            bag_size=args.bag_size,
+            num_batches=args.num_batches,
+            dist=args.dist,
+            zipf_alpha=args.zipf_alpha,
+            overlap_ratio=args.overlap_ratio,
+            seed=args.seed,
+        )
+        batches = iter(trace)
+        num_batches = int(trace.shape[0])
+        trace_name = trace_name or f"synthetic_{args.dist}"
+    if args.num_embeddings is None:
+        args.num_embeddings = int(trace_metadata.get("total_num_embeddings", 0) or 0)
+    if not args.num_embeddings:
+        raise ValueError("--num-embeddings is required unless trace metadata contains total_num_embeddings")
     latencies: list[float] = []
     with MemTierEmbeddingBag(
         args.embedding_file,
@@ -184,12 +203,31 @@ def run(args: argparse.Namespace) -> dict:
         enable_gds=args.enable_gds,
         enable_prefetch=args.enable_prefetch,
     ) as mt:
-        for batch in trace:
+        previous_blocks: set[int] = set()
+        unique_ids_per_batch: list[int] = []
+        unique_blocks_per_batch: list[int] = []
+        block_reuse_ratios: list[float] = []
+        all_unique_ids: set[int] = set()
+        all_unique_blocks: set[int] = set()
+        total_lookups = 0
+        for batch in batches:
+            batch = np.asarray(batch, dtype=np.uint64).reshape(-1)
+            blocks = ids_to_blocks(batch, args.rows_per_block)
+            block_set = set(int(x) for x in blocks)
+            id_set = set(int(x) for x in batch)
+            all_unique_ids.update(id_set)
+            all_unique_blocks.update(block_set)
+            unique_ids_per_batch.append(len(id_set))
+            unique_blocks_per_batch.append(len(block_set))
+            total_lookups += int(batch.size)
+            if previous_blocks:
+                block_reuse_ratios.append(len(block_set & previous_blocks) / max(len(block_set), 1))
+            previous_blocks = block_set
             out = mt.forward(batch, args.bag_size, args.mode)
             latencies.append(out["latency_ms"])
         metrics = mt.metrics()
 
-    lookups = int(trace.size)
+    lookups = int(total_lookups)
     total_s = sum(latencies) / 1000.0
     posix_reads = int(metrics.get("posix_reads", 0))
     hbm_hits = int(metrics.get("hbm_hits", 0))
@@ -197,6 +235,8 @@ def run(args: argparse.Namespace) -> dict:
     denom = max(hbm_hits + dram_hits + posix_reads + int(metrics.get("gds_reads", 0)), 1)
     result = {
         "system": "memtier",
+        "trace_source": args.trace_source,
+        "trace_name": trace_name,
         "dist": args.dist,
         "zipf_alpha": args.zipf_alpha,
         "num_embeddings": args.num_embeddings,
@@ -204,7 +244,7 @@ def run(args: argparse.Namespace) -> dict:
         "rows_per_block": args.rows_per_block,
         "batch_size": args.batch_size,
         "bag_size": args.bag_size,
-        "num_batches": int(trace.shape[0]),
+        "num_batches": int(num_batches),
         "avg_latency_ms": float(statistics.mean(latencies)) if latencies else 0.0,
         "p50_latency_ms": percentile(latencies, 50),
         "p95_latency_ms": percentile(latencies, 95),
@@ -215,6 +255,14 @@ def run(args: argparse.Namespace) -> dict:
         "dram_to_gpu_bytes": int(metrics.get("bytes_copied_dram_to_gpu", 0)),
         "posix_reads": posix_reads,
         "gds_reads": int(metrics.get("gds_reads", 0)),
+        "num_unique_ids": len(all_unique_ids),
+        "num_unique_blocks": len(all_unique_blocks),
+        "avg_unique_ids_per_batch": float(statistics.mean(unique_ids_per_batch)) if unique_ids_per_batch else 0.0,
+        "avg_unique_blocks_per_batch": float(statistics.mean(unique_blocks_per_batch)) if unique_blocks_per_batch else 0.0,
+        "p95_unique_blocks_per_batch": percentile(unique_blocks_per_batch, 95),
+        "block_reuse_ratio": float(statistics.mean(block_reuse_ratios)) if block_reuse_ratios else 0.0,
+        "dram_cache_hit_rate": dram_hits / max(dram_hits + posix_reads, 1),
+        "ssd_traffic_reduction_vs_cpu_staging": 1.0 - (int(metrics.get("bytes_read_from_ssd", 0)) / max(len(all_unique_blocks) * args.rows_per_block * args.embedding_dim * args.dtype_size, 1)),
         "metrics": metrics,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -227,10 +275,13 @@ def run(args: argparse.Namespace) -> dict:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--embedding-file", required=True, type=Path)
-    parser.add_argument("--trace", type=Path)
+    parser.add_argument("--trace", type=Path, help="Backward-compatible trace path")
+    parser.add_argument("--trace-file", type=Path, help="Synthetic, Criteo, or DLRM trace file read through EmbeddingTrace")
+    parser.add_argument("--trace-source", choices=["synthetic", "criteo", "dlrm"], default="synthetic")
+    parser.add_argument("--trace-name")
     parser.add_argument("--lib", type=Path)
     parser.add_argument("--output", type=Path, default=Path("results/memtier.jsonl"))
-    parser.add_argument("--num-embeddings", type=int, required=True)
+    parser.add_argument("--num-embeddings", type=int)
     parser.add_argument("--embedding-dim", type=int, required=True)
     parser.add_argument("--rows-per-block", type=int, default=2048)
     parser.add_argument("--dtype-size", type=int, choices=[2, 4], default=2)

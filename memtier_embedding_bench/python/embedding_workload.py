@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
@@ -85,6 +84,11 @@ def estimate_block_reuse(trace: np.ndarray, rows_per_block: int) -> dict:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--trace-source", choices=["synthetic", "criteo", "dlrm"], default="synthetic")
+    parser.add_argument("--trace-file", type=Path, help="Existing Criteo/DLRM trace file to inspect instead of generating synthetic IDs")
+    parser.add_argument("--criteo-input", type=Path, help="Raw Criteo input; run scripts/preprocess_criteo_trace.py first")
+    parser.add_argument("--criteo-input-glob", help="Raw Criteo day_* glob; run scripts/preprocess_criteo_trace.py first")
+    parser.add_argument("--dlrm-input", type=Path, help="DLRM sparse input; run scripts/convert_dlrm_trace.py first")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--dist", choices=["uniform", "zipf"], default="uniform")
     parser.add_argument("--zipf-alpha", type=float, default=1.0)
@@ -100,6 +104,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.trace_source != "synthetic":
+        if args.trace_file:
+            try:
+                from trace_reader import EmbeddingTrace
+            except ImportError:  # pragma: no cover
+                from .trace_reader import EmbeddingTrace
+            trace_obj = EmbeddingTrace(args.trace_file, rows_per_block=args.rows_per_block)
+            meta = {"trace_source": args.trace_source, "trace_file": str(args.trace_file), "num_batches": trace_obj.num_batches, "metadata": trace_obj.metadata}
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.with_suffix(args.output.suffix + ".json").write_text(json.dumps(meta, indent=2, default=str) + "\n")
+            print(json.dumps(meta, indent=2, default=str))
+            return
+        tool = "scripts/preprocess_criteo_trace.py" if args.trace_source == "criteo" else "scripts/convert_dlrm_trace.py"
+        raise SystemExit(f"trace-source={args.trace_source} requires a converted --trace-file. Run {tool} first.")
+
     trace = generate_ids(
         num_embeddings=args.num_embeddings,
         batch_size=args.batch_size,
@@ -114,7 +133,7 @@ def main() -> None:
     np.save(args.output, trace)
     summary = estimate_block_reuse(trace, args.rows_per_block)
     meta = {**vars(args), **summary, "trace_shape": list(trace.shape), "dtype": str(trace.dtype)}
-    args.output.with_suffix(args.output.suffix + ".json").write_text(json.dumps(meta, indent=2) + "\n")
+    args.output.with_suffix(args.output.suffix + ".json").write_text(json.dumps(meta, indent=2, default=str) + "\n")
     print(json.dumps(meta, indent=2, default=str))
 
 

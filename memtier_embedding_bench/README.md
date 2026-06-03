@@ -111,6 +111,118 @@ Each batch has shape `[batch_size * bag_size]`.  The module also exposes:
 - `ids_to_blocks(ids, rows_per_block)`
 - `estimate_block_reuse(trace, rows_per_block)`
 
+
+## Criteo/DLRM Trace Mode
+
+Synthetic uniform/Zipf traces are useful for controlled sweeps, but W1 can also
+run Criteo/DLRM-derived categorical traces to reflect real DLRM sparse feature
+locality, hot IDs, and block reuse.
+
+### Prepare Criteo data
+
+This repository does **not** download Criteo datasets automatically.  Download
+data yourself after accepting the appropriate terms:
+
+- Kaggle Display Advertising Challenge: use the raw `train.txt` file.
+- Criteo Terabyte: use `day_0` ... `day_23` files and pass them with
+  `--input-glob`.
+
+The converter ignores labels/dense features for lookup generation and hashes only
+the 26 categorical fields.  Empty categorical values are mapped to deterministic
+field-specific unknown IDs unless `--drop-empty` is set.
+
+```bash
+python scripts/preprocess_criteo_trace.py \
+  --input /data/criteo/train.txt \
+  --output results/traces/criteo_kaggle_10m.npz \
+  --max-samples 10000000 \
+  --batch-size 16384 \
+  --hash-size 10000000 \
+  --global-id-mode per_field_offset \
+  --rows-per-block 2048
+```
+
+For Terabyte day files:
+
+```bash
+python scripts/preprocess_criteo_trace.py \
+  --input-glob "/data/criteo/day_*" \
+  --output results/traces/criteo_tb_10m.npz \
+  --max-samples 10000000 \
+  --batch-size 16384 \
+  --hash-size 10000000 \
+  --global-id-mode per_field_offset \
+  --rows-per-block 2048
+```
+
+The output `.npz` contains `ids`, `block_ids`, `offsets`, optional `labels`,
+`field_offsets`, `hash_sizes`, and `metadata_json`.  Stable `blake2b` hashing is
+used instead of Python's process-randomized `hash()`.
+
+### Convert DLRM/TorchRec preprocessed sparse traces
+
+`convert_dlrm_trace.py` supports `.npy`, `.npz`, and `.jsonl` inputs.  Current
+recognized `.npz` keys include `lS_i`, `sparse`, `sparse_ids`, `X_cat`, and
+`cat`.  Supported array shapes are `[num_samples, 26]` and
+`[num_batches, batch_size, 26]`; JSONL rows may contain `{"sparse_ids": [...]}`.
+
+```bash
+python scripts/convert_dlrm_trace.py \
+  --input /data/dlrm/sparse.npy \
+  --input-format auto \
+  --output results/traces/dlrm_sparse.npz \
+  --rows-per-block 2048 \
+  --num-embeddings 260000000 \
+  --batch-size 16384 \
+  --field-offset-mode direct
+```
+
+### Analyze trace locality and hot blocks
+
+```bash
+python scripts/analyze_trace.py \
+  --trace-file results/traces/criteo_kaggle_10m.npz \
+  --rows-per-block 2048 \
+  --output-json results/trace_stats/criteo_kaggle_10m.json \
+  --output-csv results/trace_stats/criteo_kaggle_10m.csv
+```
+
+The analyzer emits JSON/CSV data for paper plots, including top 1%/5%/10% block
+coverage, estimated Zipf-like skew, p50/p95 unique blocks per batch,
+approximate reuse distance, LRU DRAM-cache hit-rate simulation, and multi-GPU
+rank overlap estimates.
+
+### Run baselines with a Criteo trace
+
+```bash
+python python/baseline_cpu_staging.py \
+  --embedding-file /mnt/nvme/emb_50gb.bin \
+  --trace-source criteo \
+  --trace-file results/traces/criteo_kaggle_10m.npz \
+  --embedding-dim 128 \
+  --rows-per-block 2048 \
+  --dtype fp16 \
+  --output results/cpu_staging_criteo.jsonl
+```
+
+### Run MemTier with a Criteo trace
+
+```bash
+python python/memtier_embedding.py \
+  --embedding-file /mnt/nvme/emb_50gb.bin \
+  --trace-source criteo \
+  --trace-file results/traces/criteo_kaggle_10m.npz \
+  --embedding-dim 128 \
+  --rows-per-block 2048 \
+  --dram-cache-gb 32 \
+  --hbm-cache-gb 4 \
+  --output results/memtier_criteo.jsonl
+```
+
+Both CPU staging and MemTier use the same `EmbeddingTrace` reader, so synthetic
+`.npy`, Criteo `.npz`, DLRM `.npz/.npy`, and supported JSONL traces can be
+compared through a common JSONL schema with `trace_source` and `trace_name`.
+
 ## Run baselines
 
 CPU staging baseline:
